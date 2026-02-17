@@ -9,10 +9,10 @@ if (!BACKEND) {
   process.exit(1)
 }
 
-// Enable CORS for dev
-fastify.register(require('@fastify/cors'), {
-  origin: true
-})
+// // Enable CORS for dev
+// fastify.register(require('@fastify/cors'), {
+//   origin: true
+// })
 
 let interceptors = []
 let requestHistory = []
@@ -197,6 +197,8 @@ fastify.register(httpProxy, {
   prefix: '/',
   http2: false
 })
+
+console.log(fastify.printRoutes())
 
 fastify.listen({ port: 3000, host: '0.0.0.0' }, (err) => {
   if (err) throw err
