@@ -9,10 +9,12 @@ if (!BACKEND) {
   process.exit(1)
 }
 
-// // Enable CORS for dev
-// fastify.register(require('@fastify/cors'), {
-//   origin: true
-// })
+// Enable CORS
+fastify.register(require('@fastify/cors'), {
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+})
 
 let interceptors = []
 let requestHistory = []
@@ -147,13 +149,13 @@ function matchInterceptor(req) {
 // Interception hook
 // -------------------------
 fastify.addHook('onRequest', async (request, reply) => {
-  // Skip meta routes
-  if (request.url.startsWith('/__')) return
+  if (reply.sent) return; // CORS preflight handled
 
-  const startTime = Date.now()
-  const interceptor = matchInterceptor(request)
+  if (request.url.startsWith('/__')) return; // Skip meta routes
 
-  // Log request
+  const startTime = Date.now();
+  const interceptor = matchInterceptor(request);
+
   const logEntry = {
     id: randomUUID(),
     timestamp: new Date().toISOString(),
@@ -161,33 +163,36 @@ fastify.addHook('onRequest', async (request, reply) => {
     url: request.url,
     intercepted: !!interceptor,
     interceptorId: interceptor?.id,
-    duration: 0
+    duration: 0, // Will be updated later
+    status: undefined // Will be updated later
+  };
+
+  if (interceptor) {
+    // Interceptor found: handle it and send response
+    const { status, headers, body, delayMs } = interceptor.response;
+
+    if (delayMs) {
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+
+    if (headers) {
+      Object.entries(headers).forEach(([k, v]) => reply.header(k, v));
+    }
+
+    logEntry.duration = Date.now() - startTime;
+    logEntry.status = status;
+    requestHistory.push(logEntry);
+
+    reply.code(status || 200);
+    reply.send(body);
+    // No explicit return needed after reply.send() if it's the end of the hook's responsibility for this request.
+  } else {
+    // No interceptor found: log and let it fall through to httpProxy
+    logEntry.duration = Date.now() - startTime; // Log duration even for non-intercepted
+    requestHistory.push(logEntry);
+    // No response sent here, Fastify router will find httpProxy.
   }
-
-  if (!interceptor) {
-    requestHistory.push(logEntry)
-    return
-  }
-
-  const { status, headers, body, delayMs } = interceptor.response
-
-  if (delayMs) {
-    await new Promise(r => setTimeout(r, delayMs))
-  }
-
-  if (headers) {
-    Object.entries(headers).forEach(([k, v]) => reply.header(k, v))
-  }
-
-  logEntry.duration = Date.now() - startTime
-  logEntry.status = status
-  requestHistory.push(logEntry)
-
-  reply.code(status || 200)
-  reply.send(body)
-
-  return reply
-})
+});
 
 // -------------------------
 // Proxy fallback
@@ -195,13 +200,30 @@ fastify.addHook('onRequest', async (request, reply) => {
 fastify.register(httpProxy, {
   upstream: BACKEND,
   prefix: '/',
-  http2: false
+  httpMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'], // Exclude OPTIONS
+  http2: false,
+  replyOptions: {
+    rewriteResponseHeaders: (headers) => {
+      const corsHeaders = [
+        'access-control-allow-origin',
+        'access-control-allow-credentials',
+        'access-control-allow-methods',
+        'access-control-allow-headers',
+        'access-control-expose-headers'
+      ]
+      const newHeaders = { ...headers }
+      corsHeaders.forEach(h => {
+        delete newHeaders[h]
+      })
+      return newHeaders
+    }
+  }
 })
-
 console.log(fastify.printRoutes())
 
-fastify.listen({ port: 3000, host: '0.0.0.0' }, (err) => {
+fastify.listen({ port: 0, host: '0.0.0.0' }, (err, address) => {
   if (err) throw err
-  console.log(`Proxy running on http://localhost:3000`)
+  const assignedPort = address.split(':').pop()
+  console.log(`Proxy running on http://localhost:${assignedPort}`)
   console.log(`Forwarding to ${BACKEND}`)
 })
