@@ -2,6 +2,18 @@
 const fastify = require('fastify')({ logger: true })
 const httpProxy = require('@fastify/http-proxy')
 const { randomUUID } = require('crypto')
+const { parseArgs } = require('node:util')
+
+const options = {
+  port: {
+    type: 'string',
+    short: 'p',
+    default: '3000'
+  }
+}
+
+const { values } = parseArgs({ options, strict: false })
+const PORT = parseInt(values.port, 10)
 
 const BACKEND = process.env.BACKEND
 if (!BACKEND) {
@@ -119,14 +131,14 @@ fastify.post('/__scenarios/:name/apply', async (request, reply) => {
   if (!scenario) {
     return reply.code(404).send({ error: 'Scenario not found' })
   }
-  
+
   interceptors = scenario.map(s => ({
     id: randomUUID(),
     enabled: true,
     createdAt: new Date().toISOString(),
     ...s
   }))
-  
+
   return { success: true, interceptors }
 })
 
@@ -221,9 +233,8 @@ fastify.register(httpProxy, {
 })
 console.log(fastify.printRoutes())
 
-fastify.listen({ port: 0, host: '0.0.0.0' }, (err, address) => {
+fastify.listen({ port: PORT, host: '0.0.0.0' }, (err, address) => {
   if (err) throw err
-  const assignedPort = address.split(':').pop()
-  console.log(`Proxy running on http://localhost:${assignedPort}`)
+  console.log(`Proxy running on ${address}`)
   console.log(`Forwarding to ${BACKEND}`)
 })
