@@ -151,8 +151,10 @@ function matchInterceptor(req) {
     const methodMatch = !i.method || i.method === req.method
     if (!methodMatch) return false
     if (i.isRegex) {
+       console.debug("debug:matchInterceptor:re", req.url, i.path, req.url === i.path, RegExp(i.path).test(req.url) ? "MATCH_RE" : "NO-MATCH_RE")
       return new RegExp(i.path).test(req.url)
     }
+    console.debug("debug:matchInterceptor", req.url, i.path, req.url === i.path, req.url === i.path ? "MATCH" : "NO-MATCH")
     return req.url === i.path
   })
 }
@@ -180,6 +182,7 @@ fastify.addHook('onRequest', async (request, reply) => {
   };
 
   if (interceptor) {
+    console.debug("debug:interceptor-found", interceptor);
     // Interceptor found: handle it and send response
     const { status, headers, body, delayMs } = interceptor.response;
 
