@@ -349,9 +349,15 @@ docker build -t dev-proxy .
 ### Run
 
 ```bash
-docker run -p 3000:3000 \
-  -e BACKEND=http://your-backend:8080 \
-  dev-proxy
+BACKEND=http://your-backend:8080 npm run run
+```
+
+### Configuration
+
+You can specify the listening port using the `--port` or `-p` argument:
+
+```bash
+BACKEND=http://your-backend:8080 npm run run -- --port 4000
 ```
 
 ### Docker Compose Example
